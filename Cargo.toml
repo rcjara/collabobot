@@ -8,4 +8,6 @@ edition = "2021"
 [dependencies]
 axum = "0.6.20"
 sqlx = { version = "0.7.1", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "chrono", "migrate", "json"] }
+surrealdb = "1.0.0"
+surrealdb-migrations = { path = "../vendor/surrealdb-migrations" }
 tokio = { version = "1.31.0", features = ["full"] }
