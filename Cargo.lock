@@ -759,6 +759,7 @@ name = "collabobot"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "color-eyre",
  "eyre",
  "sqlx",
  "surrealdb",

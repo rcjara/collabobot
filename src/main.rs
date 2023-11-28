@@ -1,6 +1,6 @@
 use axum::{routing::get, Router};
-use eyre::{Result, WrapErr};
-use std::net::SocketAddr;
+use color_eyre::eyre::{ErrReport, Result, WrapErr};
+use std::{error::Error, net::SocketAddr};
 use surrealdb::engine::any::connect;
 use surrealdb::opt::auth::Root;
 use tracing::{event, instrument, Level};
@@ -9,22 +9,23 @@ fn log_and_panic_if_error(result: Result<()>) -> () {
     match result {
         Ok(()) => (),
         Err(err) => {
-            event!(Level::ERROR, "{}", err);
+            event!(Level::ERROR, "{:?}", err);
             panic!("bailing from unrecoverable error");
         }
     }
 }
 
 fn setup_logging() -> Result<()> {
-    use std::fs::File;
-    let now = time::OffsetDateTime::now_utc();
-    let filename =
-        time_fmt::format::format_offset_date_time("collabobot_%Y-%m-%d_%H:%M:%S.json", now)?;
-    let log_file = File::create(filename)?;
+    //use std::fs::File;
+    //let now = time::OffsetDateTime::now_utc();
+    //let filename =
+    //    time_fmt::format::format_offset_date_time("collabobot_%Y-%m-%d_%H:%M:%S.json", now)?;
+    //let log_file = File::create(filename)?;
 
     let subscriber = tracing_subscriber::fmt()
         .json()
-        .with_writer(log_file)
+        .with_writer(std::io::stderr)
+        .with_max_level(Level::DEBUG)
         .finish();
 
     let () =
@@ -44,22 +45,21 @@ async fn apply_migrations() -> Result<()> {
     // Signin as a namespace, database, or root user
     db.signin(Root {
         username: "root",
-        password: "root",
+        password: "rot",
     })
     .await
-    .wrap_err("Failed to login to db")?;
+    .wrap_err("unable to sign in for migrations")?;
 
     event!(Level::DEBUG, "signed into db");
 
     // Select a specific namespace / database
     db.use_ns("namespace").use_db("database").await?;
 
-    event!(Level::DEBUG, "applying migrations");
     // Apply all migrations
     MigrationRunner::new(&db)
         .up()
         .await
-        .wrap_err("Failed to apply migrations")?;
+        .context("failed to apply migrations")?;
     event!(Level::INFO, "migrations applied");
 
     Ok(())
