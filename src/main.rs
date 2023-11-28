@@ -3,11 +3,39 @@ use eyre::{Result, WrapErr};
 use std::net::SocketAddr;
 use surrealdb::engine::any::connect;
 use surrealdb::opt::auth::Root;
-use surrealdb_migrations::MigrationRunner;
 use tracing::{event, instrument, Level};
+
+fn log_and_panic_if_error(result: Result<()>) -> () {
+    match result {
+        Ok(()) => (),
+        Err(err) => {
+            event!(Level::ERROR, "{}", err);
+            panic!("bailing from unrecoverable error");
+        }
+    }
+}
+
+fn setup_logging() -> Result<()> {
+    use std::fs::File;
+    let now = time::OffsetDateTime::now_utc();
+    let filename =
+        time_fmt::format::format_offset_date_time("collabobot_%Y-%m-%d_%H:%M:%S.json", now)?;
+    let log_file = File::create(filename)?;
+
+    let subscriber = tracing_subscriber::fmt()
+        .json()
+        .with_writer(log_file)
+        .finish();
+
+    let () =
+        tracing::subscriber::set_global_default(subscriber).wrap_err("Failed to setup logging")?;
+
+    Ok(())
+}
 
 #[instrument]
 async fn apply_migrations() -> Result<()> {
+    use surrealdb_migrations::MigrationRunner;
     event!(Level::DEBUG, "connecting to db");
     let db = connect("ws://localhost:8000").await?;
     event!(Level::DEBUG, "connected to db");
@@ -39,10 +67,9 @@ async fn apply_migrations() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let subscriber = tracing_subscriber::fmt().finish();
+    let () = log_and_panic_if_error(setup_logging());
+    let () = log_and_panic_if_error(apply_migrations().await);
 
-    let () =
-        tracing::subscriber::set_global_default(subscriber).wrap_err("Failed to setup logging")?;
     // Route all requests on "/" endpoint to anonymous handler.
     //
     // A handler is an async function which returns something that implements
@@ -51,7 +78,6 @@ async fn main() -> Result<()> {
     // A closure or a function can be used as handler.
     //
     //
-    let () = apply_migrations().await?;
 
     let app = Router::new().route("/", get(handler));
 
