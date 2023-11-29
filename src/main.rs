@@ -10,7 +10,7 @@ fn log_and_panic_if_error(result: Result<()>) -> () {
         Ok(()) => (),
         Err(err) => {
             event!(Level::ERROR, "{:?}", err);
-            panic!("bailing from unrecoverable error");
+            panic!("{:?}", err);
         }
     }
 }
@@ -28,8 +28,8 @@ fn setup_logging() -> Result<()> {
         .with_max_level(Level::DEBUG)
         .finish();
 
-    let () =
-        tracing::subscriber::set_global_default(subscriber).wrap_err("Failed to setup logging")?;
+    let () = tracing::subscriber::set_global_default(subscriber)?;
+    let () = color_eyre::install()?;
 
     Ok(())
 }
@@ -67,7 +67,7 @@ async fn apply_migrations() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let () = log_and_panic_if_error(setup_logging());
+    let () = setup_logging()?;
     let () = log_and_panic_if_error(apply_migrations().await);
 
     // Route all requests on "/" endpoint to anonymous handler.
