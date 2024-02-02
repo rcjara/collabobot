@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = "0.6.20"
+axum = { version = "0.6.20", features = ["tracing"] }
 color-eyre = "0.6.2"
 eyre = "0.6.9"
-sqlx = { version = "0.7.1", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "chrono", "migrate", "json"] }
+serde = { version = "1.0.193", features = ["derive"] }
 surrealdb = "1.0.0"
 surrealdb-migrations = "1.0.0"
 time = { version = "0.3.30", features = ["serde-human-readable"] }
