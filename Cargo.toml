@@ -6,14 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.6.20", features = ["tracing"] }
+axum = { version = "0.7.4", features = ["tracing"] }
+axum-server = "0.6.0"
 color-eyre = "0.6.2"
-eyre = "0.6.9"
-serde = { version = "1.0.193", features = ["derive"] }
-surrealdb = "1.0.0"
-surrealdb-migrations = "1.0.0"
-time = { version = "0.3.30", features = ["serde-human-readable"] }
+eyre = "0.6.12"
+serde = { version = "1.0.196", features = ["derive"] }
+surrealdb = "1.1.1"
+surrealdb-migrations = "1.0.1"
+time = { version = "0.3.32", features = ["serde-human-readable"] }
 time-fmt = "0.3.8"
-tokio = { version = "1.31.0", features = ["full"] }
+tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["json"] }

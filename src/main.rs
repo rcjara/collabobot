@@ -54,7 +54,7 @@ async fn apply_migrations(db: &Surreal<Any>) -> Result<()> {
     Ok(())
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Project {
     project_name: String,
     created_at: Datetime,
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
 
     let app = Router::new().route("/", get(handler)).with_state(appstate);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    let () = axum::Server::bind(&addr)
+    let () = axum_server::bind(addr)
         .serve(app.into_make_service())
         .await?;
 
@@ -106,5 +106,6 @@ async fn main() -> Result<()> {
 
 async fn handler(State(appstate): State<Arc<AppState>>) -> &'static str {
     let projects = appstate.db.select::<Vec<Project>>("projects");
+
     "Hello, world!"
 }
