@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.7.4", features = ["tracing"] }
 axum-server = "0.6.0"
+chrono = "0.4.34"
 color-eyre = "0.6.2"
 eyre = "0.6.12"
 serde = { version = "1.0.196", features = ["derive"] }
