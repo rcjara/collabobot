@@ -5,6 +5,7 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::{any, post};
 use axum::Form;
 use axum::{routing::get, Router};
+use collabobot::db;
 use color_eyre::eyre::{Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::future::IntoFuture;
@@ -45,20 +46,6 @@ fn setup_logging() -> Result<()> {
     Ok(())
 }
 
-#[instrument]
-async fn apply_migrations(db: &Surreal<Any>) -> Result<()> {
-    use surrealdb_migrations::MigrationRunner;
-
-    // Apply all migrations
-    MigrationRunner::new(&db)
-        .up()
-        .await
-        .context("failed to apply migrations")?;
-    event!(Level::INFO, "migrations applied");
-
-    Ok(())
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 struct Project {
     project_name: String,
@@ -78,33 +65,38 @@ struct AppState {
 
 impl AppState {
     async fn initialize() -> Result<Self> {
-        event!(Level::DEBUG, "connecting to db");
-        let db = connect("ws://localhost:8000").await?;
-        event!(Level::DEBUG, "connected to db");
-
-        event!(Level::DEBUG, "signing into db");
-        // Signin as a namespace, database, or root user
-        db.signin(Root {
-            username: "root",
-            password: "root",
-        })
-        .await
-        .wrap_err("unable to sign in")?;
-
-        event!(Level::DEBUG, "signed into db");
-
-        // Select a specific namespace / database
-        db.use_ns("namespace").use_db("database").await?;
+        let db = db::logon_as_root().await?;
         Ok(Self { db })
     }
 }
+
+/*
+ use tower::{ServiceBuilder, ServiceExt, Service};
+ use tower_http::trace::TraceLayer;
+ ServiceBuilder::new()
+    .layer(
+        TraceLayer::new_for_http()
+            .make_span_with(
+                DefaultMakeSpan::new().include_headers(true)
+            )
+            .on_request(
+                DefaultOnRequest::new().level(Level::INFO)
+            )
+            .on_response(
+                DefaultOnResponse::new()
+                    .level(Level::INFO)
+                    .latency_unit(LatencyUnit::Micros)
+            )
+            // on so on for `on_eos`, `on_body_chunk`, and `on_failure`
+    )
+*/
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let () = setup_logging()?;
 
     let appstate = Arc::new(AppState::initialize().await?);
-    let () = log_and_panic_if_error(apply_migrations(&appstate.db).await);
+    let () = log_and_panic_if_error(db::apply_migrations(&appstate.db).await);
     //let error_handler = HandleError::new(handler, handle_eyre_error);
 
     let app = Router::new()
