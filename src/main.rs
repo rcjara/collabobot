@@ -5,8 +5,9 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::{any, post};
 use axum::Form;
 use axum::{routing::get, Router};
+use collabobot::appstate::AppState;
 use collabobot::db;
-use color_eyre::eyre::{Result, WrapErr};
+use collabobot::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::future::IntoFuture;
 use std::net::SocketAddr;
@@ -15,13 +16,12 @@ use surrealdb::engine::any::{connect, Any};
 use surrealdb::opt::auth::Root;
 use surrealdb::sql::Datetime;
 use surrealdb::Surreal;
-use tracing::{event, instrument, Level};
 
 fn log_and_panic_if_error(result: Result<()>) -> () {
     match result {
         Ok(()) => (),
         Err(err) => {
-            event!(Level::ERROR, "{:?}", err);
+            error!("{:?}", err);
             panic!("{:?}", err);
         }
     }
@@ -37,7 +37,7 @@ fn setup_logging() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
         .json()
         .with_writer(std::io::stderr)
-        .with_max_level(Level::DEBUG)
+        .with_max_level(tracing::Level::DEBUG)
         .finish();
 
     let () = tracing::subscriber::set_global_default(subscriber)?;
@@ -56,18 +56,6 @@ struct Project {
 #[derive(Debug, Serialize, Deserialize)]
 struct ProjectForm {
     project_name: String,
-}
-
-#[derive(Clone)]
-struct AppState {
-    pub db: Surreal<Any>,
-}
-
-impl AppState {
-    async fn initialize() -> Result<Self> {
-        let db = db::logon_as_root().await?;
-        Ok(Self { db })
-    }
 }
 
 /*
@@ -124,7 +112,7 @@ async fn new_project_form(
     State(_appstate): State<Arc<AppState>>,
     request: Request,
 ) -> (StatusCode, Html<String>) {
-    event!(Level::INFO, "GET new-message");
+    info!("GET new-message");
     (
         StatusCode::OK,
         format!(
@@ -151,12 +139,12 @@ async fn handle_new_project(
     State(appstate): State<Arc<AppState>>,
     Form(project_form): Form<ProjectForm>,
 ) -> (StatusCode, Html<String>) {
-    event!(Level::INFO, "Got a post request to handle a new project");
+    info!("Got a post request to handle a new project");
     let project: std::result::Result<Vec<Project>, _> =
         appstate.db.create("projects").content(project_form).await;
     match project {
         Ok(projects) => {
-            event!(Level::INFO, "WTF are these projects: {:?}", projects);
+            info!("WTF are these projects: {:?}", projects);
             match projects.first() {
                 Some(project) => (
                     StatusCode::CREATED,
@@ -180,7 +168,7 @@ async fn handle_new_project(
 }
 
 async fn handler(State(appstate): State<Arc<AppState>>) -> (StatusCode, Html<String>) {
-    event!(Level::INFO, "Loading the root of the app");
+    info!("Loading the root of the app");
     let projects = appstate
         .db
         .select::<Vec<Project>>("projects")
@@ -196,7 +184,7 @@ async fn handler(State(appstate): State<Arc<AppState>>) -> (StatusCode, Html<Str
             (StatusCode::OK, format!("<ul>{string}</ul>").into())
         }
         Err(error) => {
-            event!(Level::ERROR, "error {}", error);
+            error!("error {}", error);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("<p>There was an error: {:?}</p>", error).into(),

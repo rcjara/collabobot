@@ -25,7 +25,7 @@ pub async fn apply_migrations(db: &Surreal<Any>) -> Result<()> {
     Ok(())
 }
 
-pub async fn logon_as_root() -> Result<Surreal<Any>> {
+pub(crate) async fn logon_as_root() -> Result<Surreal<Any>> {
     debug!("connecting to db");
     let db = connect(uri).await?;
     debug!("connected to db");

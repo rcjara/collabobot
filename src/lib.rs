@@ -1,2 +1,3 @@
+pub mod appstate;
 pub mod db;
-mod prelude;
+pub mod prelude;
