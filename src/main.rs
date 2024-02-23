@@ -1,12 +1,14 @@
+use axum::body::Body;
 use axum::error_handling::HandleError;
-use axum::extract::{Request, State};
+use axum::extract::{Path, Request, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{Html, IntoResponse};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{any, post};
 use axum::Form;
 use axum::{routing::get, Router};
 use collabobot::appstate::AppState;
 use collabobot::db;
+use collabobot::internal_service_error::AppError;
 use collabobot::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::future::IntoFuture;
@@ -16,6 +18,7 @@ use surrealdb::engine::any::{connect, Any};
 use surrealdb::opt::auth::Root;
 use surrealdb::sql::Datetime;
 use surrealdb::Surreal;
+use tower_http::LatencyUnit;
 
 fn log_and_panic_if_error(result: Result<()>) -> () {
     match result {
@@ -35,7 +38,7 @@ fn setup_logging() -> Result<()> {
     //let log_file = File::create(filename)?;
 
     let subscriber = tracing_subscriber::fmt()
-        .json()
+        //.json()
         .with_writer(std::io::stderr)
         .with_max_level(tracing::Level::DEBUG)
         .finish();
@@ -58,26 +61,9 @@ struct ProjectForm {
     project_name: String,
 }
 
-/*
- use tower::{ServiceBuilder, ServiceExt, Service};
- use tower_http::trace::TraceLayer;
- ServiceBuilder::new()
-    .layer(
-        TraceLayer::new_for_http()
-            .make_span_with(
-                DefaultMakeSpan::new().include_headers(true)
-            )
-            .on_request(
-                DefaultOnRequest::new().level(Level::INFO)
-            )
-            .on_response(
-                DefaultOnResponse::new()
-                    .level(Level::INFO)
-                    .latency_unit(LatencyUnit::Micros)
-            )
-            // on so on for `on_eos`, `on_body_chunk`, and `on_failure`
-    )
-*/
+use tower::{Service, ServiceBuilder, ServiceExt};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+fn tracing_layer() -> impl tower::Layer<()> {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -86,6 +72,15 @@ async fn main() -> Result<()> {
     let appstate = Arc::new(AppState::initialize().await?);
     let () = log_and_panic_if_error(db::apply_migrations(&appstate.db).await);
     //let error_handler = HandleError::new(handler, handle_eyre_error);
+    //
+    let tracing_layer = TraceLayer::new_for_http()
+        .make_span_with(DefaultMakeSpan::new().include_headers(true))
+        .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
+        .on_response(
+            DefaultOnResponse::new()
+                .level(tracing::Level::INFO)
+                .latency_unit(LatencyUnit::Micros),
+        );
 
     let app = Router::new()
         .route("/", get(handler))
@@ -94,6 +89,8 @@ async fn main() -> Result<()> {
             get(new_project_form).post(handle_new_project),
         )
         .route("/hi", get(hi_handler))
+        .route("/projects/:id", get(project))
+        .layer(tracing_layer)
         .fallback(handler_404)
         .with_state(appstate);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -112,7 +109,7 @@ async fn new_project_form(
     State(_appstate): State<Arc<AppState>>,
     request: Request,
 ) -> (StatusCode, Html<String>) {
-    info!("GET new-message");
+    // info!("GET new-message");
     (
         StatusCode::OK,
         format!(
@@ -135,60 +132,62 @@ async fn hi_handler(State(_appstate): State<Arc<AppState>>) -> Html<&'static str
     Html("<h3>Hi!</h3>")
 }
 
+async fn project(
+    State(appstate): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<(StatusCode, Html<String>)> {
+    let project: Option<Project> = appstate.db.select(("projects", id.clone())).await?;
+    let response = match project {
+        Some(project) => (
+            StatusCode::OK,
+            format!("<h1>{}</h1>", project.project_name).into(),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            format!("no projects matching \"{}\"", id).into(),
+        ),
+    };
+    Ok(response)
+}
+
 async fn handle_new_project(
     State(appstate): State<Arc<AppState>>,
     Form(project_form): Form<ProjectForm>,
-) -> (StatusCode, Html<String>) {
-    info!("Got a post request to handle a new project");
-    let project: std::result::Result<Vec<Project>, _> =
-        appstate.db.create("projects").content(project_form).await;
-    match project {
-        Ok(projects) => {
-            info!("WTF are these projects: {:?}", projects);
-            match projects.first() {
-                Some(project) => (
-                    StatusCode::CREATED,
-                    format!(
-                        "<h1> You created a project: {}</h1><p>created at: {}</p>",
-                        project.project_name, project.created_at
-                    )
-                    .into(),
-                ),
-                None => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("<p>No project was created</p>").into(),
-                ),
-            }
+) -> Result<Response<Body>> {
+    // info!("Got a post request to handle a new project");
+    let projects: Vec<Project> = appstate.db.create("projects").content(project_form).await?;
+    info!("Trying to create a project");
+    let response = match projects.first() {
+        Some(project) => {
+            info!("Created a project with id: '{}'", &project.id);
+            Redirect::to(&format!("/projects/{}", project.id.id.to_raw())).into_response()
         }
-        Err(error) => (
+        None => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("<p>There was an error: {:?}</p>", error).into(),
-        ),
-    }
+            format!("<p>No project was created</p>"),
+        )
+            .into_response(),
+    };
+    Ok(response)
 }
 
-async fn handler(State(appstate): State<Arc<AppState>>) -> (StatusCode, Html<String>) {
-    info!("Loading the root of the app");
+async fn handler(State(appstate): State<Arc<AppState>>) -> Result<(StatusCode, Html<String>)> {
+    // info!("Loading the root of the app");
     let projects = appstate
         .db
         .select::<Vec<Project>>("projects")
         .into_future()
-        .await;
-    match projects {
-        Ok(projects) => {
-            let string = projects
-                .into_iter()
-                .map(|project| format!("<li>{} &#8212 {}</li>", project.id, project.project_name))
-                .collect::<Vec<_>>()
-                .join("\n");
-            (StatusCode::OK, format!("<ul>{string}</ul>").into())
-        }
-        Err(error) => {
-            error!("error {}", error);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("<p>There was an error: {:?}</p>", error).into(),
+        .await?;
+    let inner_html = projects
+        .into_iter()
+        .map(|project| {
+            let id = project.id.id.to_raw();
+            format!(
+                "<li><a href=\"projects/{}\">{}</a></li>",
+                id, project.project_name
             )
-        }
-    }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok((StatusCode::OK, format!("<ul>{inner_html}</ul>").into()))
 }
