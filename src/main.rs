@@ -1,11 +1,12 @@
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Redirect};
 use axum::{routing::get, Router};
 use collabobot::appstate::AppState;
 use collabobot::prelude::*;
 use collabobot::{db, projects};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 
 fn log_and_panic_if_error(result: Result<()>) -> () {
@@ -30,8 +31,6 @@ fn setup_logging() -> Result<()> {
     Ok(())
 }
 
-use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let () = setup_logging()?;
@@ -48,23 +47,19 @@ async fn main() -> Result<()> {
                 .latency_unit(LatencyUnit::Micros),
         );
 
-    let app = Router::new()
-        .route("/", get(projects::handlers::get_projects))
-        .route(
-            projects::routes::root,
-            get(projects::handlers::get_projects),
-        )
-        .route(
-            projects::routes::new,
-            get(projects::handlers::get_new_project_form).post(projects::handlers::post_project),
-        )
-        .route(projects::routes::show, get(projects::handlers::get_project))
+    let (projects_route, projects_router) = projects::sub_router();
+
+    let router = Router::new()
+        .route("/", get(|| async { Redirect::permanent(projects_route) }))
+        .nest(projects_route, projects_router)
         .layer(tracing_layer)
         .fallback(handler_404)
         .with_state(appstate);
+
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+
     let () = axum_server::bind(addr)
-        .serve(app.into_make_service())
+        .serve(router.into_make_service())
         .await?;
 
     Ok(())

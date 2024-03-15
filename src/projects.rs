@@ -1,13 +1,19 @@
+use std::sync::Arc;
+
+use axum::{routing::get, Router};
 use serde::{Deserialize, Serialize};
 use surrealdb::sql::Datetime;
 
-pub mod routes {
-    pub const root: &str = "projects";
-    pub const new: &str = "projects/new";
-    pub const show: &str = "projects/:id";
+use crate::appstate::AppState;
+
+mod routes {
+    pub const SUB_DOMAIN: &str = "/projects";
+    pub const ROOT: &str = "/";
+    pub const NEW: &str = "/new";
+    pub const SHOW: &str = "/:id";
 }
 
-pub mod handlers {
+mod handlers {
     use crate::prelude::*;
     use std::{future::IntoFuture, sync::Arc};
 
@@ -107,7 +113,7 @@ impl Project {
         self.id.id.to_raw()
     }
     pub fn route_to(&self) -> String {
-        format!("{}/{}", routes::root, self.raw_id())
+        format!("{}/{}", routes::SUB_DOMAIN, self.raw_id())
     }
 
     pub fn as_list_item(&self) -> String {
@@ -117,6 +123,17 @@ impl Project {
             self.project_name
         )
     }
+}
+
+pub fn sub_router() -> (&'static str, Router<Arc<AppState>>) {
+    let router = Router::new()
+        .route(routes::ROOT, get(handlers::get_projects))
+        .route(
+            routes::NEW,
+            get(handlers::get_new_project_form).post(handlers::post_project),
+        )
+        .route(routes::SHOW, get(handlers::get_project));
+    (routes::SUB_DOMAIN, router)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
