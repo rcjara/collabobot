@@ -1,0 +1,33 @@
+users
+  -- oauth
+  username ** temp, use oauth
+  zulip_username
+
+projects
+  name
+  created_at
+  created_by (user)
+  description
+  link(github)
+  technologies list
+  topics list
+
+offer
+  topics
+  technologies
+  created_by (user)
+  created_at
+
+pairing  // zulip usernames
+  one of
+    project
+    offer
+  availability *** string for now
+  good until
+
+topics
+  (e.g. AI project, Audio)
+technologies
+  (e.g. rust, ruby, surrealdb, packer)
+
+
