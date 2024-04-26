@@ -11,19 +11,18 @@ const password: &str = "root";
 const namespace: &str = "namespace";
 const database: &str = "database";
 
-#[instrument]
-pub async fn apply_migrations(db: &Surreal<Any>) -> Result<()> {
-    use surrealdb_migrations::MigrationRunner;
-
-    // Apply all migrations
-    MigrationRunner::new(&db)
-        .up()
-        .await
-        .context("failed to apply migrations")?;
-    info!("migrations applied");
-
-    Ok(())
-}
+// #[instrument]
+// pub async fn apply_migrations(db: &Surreal<Any>) -> Result<()> {
+//     use surrealdb_migrations::MigrationRunner;
+//     let mr = MigrationRunner::new(&db);
+//     info!("we have mr");
+//
+//     // Apply all migrations
+//     mr.up().await.context("failed to apply migrations")?;
+//     info!("migrations applied");
+//
+//     Ok(())
+// }
 
 pub(crate) async fn logon_as_root() -> Result<Surreal<Any>> {
     debug!("connecting to db");

@@ -36,7 +36,8 @@ async fn main() -> Result<()> {
     let () = setup_logging()?;
 
     let appstate = Arc::new(AppState::initialize().await?);
-    let () = log_and_panic_if_error(db::apply_migrations(&appstate.db).await);
+    info!("we have an appstate");
+    //let () = log_and_panic_if_error(db::apply_migrations(&appstate.db).await);
 
     let tracing_layer = TraceLayer::new_for_http()
         .make_span_with(DefaultMakeSpan::new().include_headers(true))

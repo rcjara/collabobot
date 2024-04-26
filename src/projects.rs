@@ -27,7 +27,7 @@ mod handlers {
 
     use crate::appstate::AppState;
 
-    use super::{Project, ProjectForm};
+    use super::{routes, Project, ProjectForm};
 
     pub async fn get_new_project_form(
         State(_appstate): State<Arc<AppState>>,
@@ -37,9 +37,8 @@ mod handlers {
         (
         StatusCode::OK,
         format!(
-            "<p>request: {:?}</p><form action=\"/new-project\" method=\"POST\" enctype=\"application/x-www-form-urlencoded\"><input type=text name=project_name></input></form>",
-
-            request
+            " <form action=\"{}/new\" method=\"POST\" enctype=\"application/x-www-form-urlencoded\"><label for=\"project_name\">enter your project name</label><input type=text name=project_name></input></form>",
+            routes::SUB_DOMAIN
         )
         .into(),
     )

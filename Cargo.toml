@@ -12,8 +12,7 @@ chrono = "0.4.34"
 color-eyre = "0.6.2"
 eyre = "0.6.12"
 serde = { version = "1.0.196", features = ["derive"] }
-surrealdb = "1.1.1"
-surrealdb-migrations = "1.0.1"
+surrealdb = "1.4.2"
 time = { version = "0.3.32", features = ["serde-human-readable"] }
 time-fmt = "0.3.8"
 tokio = { version = "1.36.0", features = ["full"] }
